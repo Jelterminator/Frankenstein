@@ -90,9 +90,9 @@ Status
 ------
 Feature                     | Status
 ----------------------------|---------
-Basic composite solver     | Planned
-Stiffness detection        | In Progress
-Backend selection          | Planned
+Basic composite solver     | Ready for testing
+Stiffness detection        | Ready for testing
+Backend selection          | Ready for testing
 Solver switching           | Planned
 Preconditioning            | Planned
 Splitting + parallelism    | Planned
@@ -104,9 +104,6 @@ Philosophy
 
 Frankenstein.jl is a toolkit for automating solver choice, not writing new solvers. It glues together the amazing work in SciML and tries to act like a smart default.
 
-License
--------
-MIT
 
 About the Name
 --------------
@@ -168,15 +165,15 @@ Files:
 
 Key Functions:
 
-analyze_system_structure() – Run full analysis
+[DONE] analyze_system_structure() – Run full analysis
 
-detect_sparsity_patterns() – Detect sparse subsystems
+[DONE] detect_sparsity_patterns() – Detect sparse subsystems
 
-estimate_stiffness_spectrum() – Approximate stiffness metrics
+[DONE] estimate_stiffness_spectrum() – Approximate stiffness metrics
 
-identify_timescales() – Multi-scale time dynamics
+[DONE] identify_timescales() – Multi-scale time dynamics
 
-assess_coupling_strength() – Quantify inter-variable coupling
+[DONE] assess_coupling_strength() – Quantify inter-variable coupling
 
 🧱 4. Backend Management (backends/)
 Files:
@@ -201,29 +198,7 @@ Files:
 
 🧮 5. Solver Strategies (solvers/)
 
-multitimescale_solvers.jl – Time-scale aware solvers
-
-stiff_solvers.jl – Implicit stiff solvers
-
-composite_solvers.jl – IMEX/hybrid integrators
-
-splitting_solvers.jl – Operator splitting strategies
-
-adaptive_solvers.jl – Adaptive timestep and method control
-
-parallel_solvers.jl – Parallel/distributed variants
-
-Categories:
-
-Fast Solvers – Explicit schemes for diffusion-limited regions
-
-Robust Solvers – Implicit, stable solvers for stiffness
-
-Composite Solvers – IMEX and hybrid constructions
-
-Splitting Solvers – Domain and operator splitting
-
-Adaptive Solvers – Self-modifying solver strategies
+[DONE]
 
 🧬 6. Adaptation Framework (adaptation/)
 Files:
