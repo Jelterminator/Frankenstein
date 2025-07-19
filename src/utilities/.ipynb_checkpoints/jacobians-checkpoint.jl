@@ -1,6 +1,4 @@
-module Utilities.Jacobians
-
-export finite_difference_jac
+# jacobians.jl
 
 """
     finite_difference_jac(f, u, p) -> J
@@ -29,4 +27,27 @@ function finite_difference_jac(f, u, p; inplace=false)
     return J
 end
 
-end # module Utilities.Jacobians
+"""
+    compute_jacobian(f, u, p, t) -> Matrix
+
+Compute the Jacobian matrix of the ODE function `f` at state `u`, parameters `p`, and time `t`.
+Uses ForwardDiff.jl for automatic differentiation or falls back to finite differences if needed.
+"""
+function compute_jacobian(f, u, p, t)
+    if SciMLBase.has_jac(f)
+        return f.jac(u, p, t)
+    else
+        try
+            if SciMLBase.isinplace(f)
+                du = similar(u)
+                ad_func = u -> (f(du, u, p, t); du)
+            else
+                ad_func = u -> f(u, p, t)
+            end
+            return ForwardDiff.jacobian(ad_func, u)
+        catch e
+            @warn "Automatic differentiation failed: $e. Using finite differences."
+            return finite_difference_jac(u -> f(u, p, t), u, p)
+        end
+    end
+end

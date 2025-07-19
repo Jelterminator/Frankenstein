@@ -1,8 +1,8 @@
-# This file is included into `src/analysis/analysis.jl`
+module Analysis.Sparsity
 
-using SciMLBase
-using ForwardDiff
-using SparseArrays
+using ..Core: SystemAnalysis
+
+using SciMLBase, ForwardDiff, SparseArrays, Symbolics
 using Logging  # For warnings
 
 """
@@ -41,8 +41,8 @@ function detect_sparsity_patterns(prob::SciMLBase.ODEProblem)
         end
     end
 
-    # Method 3: Numerical detection for small systems only
-    if length(prob.u0) < 1000
+    # Method 3: Numerical detection
+    if length(prob.u0) < 10000
         try
             u0 = prob.u0
             p = prob.p
@@ -59,7 +59,7 @@ function detect_sparsity_patterns(prob::SciMLBase.ODEProblem)
             @warn "Numerical sparsity detection with ForwardDiff failed: $e."
         end
     else
-        @warn "System is too large for automatic sparsity detection (≥100 variables). Please provide jac_prototype for better performance."
+        @warn "System is too large for automatic sparsity detection (≥10000 variables). Please provide jac_prototype for better performance."
     end
 
     # If all methods fail or are skipped

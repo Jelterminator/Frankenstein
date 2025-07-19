@@ -112,6 +112,7 @@ end
 Encapsulates the structural and dynamic properties of an ODE problem,
 as determined by the analysis phase.
 """
+
 struct SystemAnalysis{T}
     stiffness_ratio::T
     sparsity_pattern::Any
@@ -120,12 +121,30 @@ struct SystemAnalysis{T}
     condition_number::T
     system_size::Int
     is_sparse::Bool
-    jacobian::Union{Matrix{T}, Nothing}  # Store Jacobian for reuse
+    jacobian::Union{Matrix{T}, Nothing}
+    stable_count::Int
+    last_update_step::Int  # New field
+    current_step::Int      # New field
+    last_norm_du::T       # New field
+    history::Int          # New field
 end
 
-# Update constructor for un-analyzed system
 function SystemAnalysis{T}() where T
-    return SystemAnalysis{T}(T(NaN), nothing, T[], T(NaN), T(NaN), 0, false, nothing)
+    return SystemAnalysis{T}(T(NaN), nothing, T[], T(NaN), T(NaN), 0, false, nothing, 0, 0, T(0), 10)
+end
+
+"""
+    StepInfo{T}
+
+Stores information about previous steps to standardize the data passed to update_stiffness!
+"""
+
+struct StepInfo{T}
+    u::Vector{T}
+    du::Vector{T}
+    dt::T
+    dt_prev::T
+    rejects::Int
 end
 
 """

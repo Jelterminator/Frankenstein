@@ -57,43 +57,75 @@ function initial_stiffness_estimate(f, u0, p; J_method=:fd, ngersh=3, weights=(1
 end
 
 """
-    update_stiffness!(sa::SystemAnalysis, step_info; 
-        dyn_weights=(1.0,1.0,1.0), dyn_max=log10(101), thresh=100, history=10,
-        decay_rate=0.9, stable_steps=5
-    )
+    update_stiffness!(sa::SystemAnalysis, step_info::Core.StepInfo; 
+        dyn_weights=(0.5,0.5,0.5,0.5), dyn_max=log10(101), thresh=100, history=10,
+        decay_rate=0.9, stable_steps=5, recompute_jacobian_interval=20)
 
-Update the SystemAnalysis.sa.stiffness_ratio based on dynamic step behavior,
-trigger deeper analysis as needed, and apply decay when system is stable:
- 1. Step shrink factor
- 2. Reject ratio
- 3. Dynamic derivative ratio
- 4. Decay stiffness when indicators show non-stiff behavior
+Updates the `stiffness_ratio` in `SystemAnalysis` based on dynamic indicators (step size changes,
+rejection rates, derivative ratios, and Gershgorin spectral bound). Designed to be computationally
+cheap by reusing the cached Jacobian when possible and limiting Jacobian recomputations.
+
+### Arguments
+- `sa`: The `SystemAnalysis` struct containing current system properties.
+- `step_info`: A `StepInfo` struct with integrator data (`u`, `du`, `dt`, `dt_prev`, `rejects`).
+- `dyn_weights`: Weights for combining step shrink, rejections, derivative ratio, and Gershgorin bound.
+- `dyn_max`: Normalization factor for dynamic score.
+- `thresh`: Stiffness threshold for setting `is_stiff`.
+- `history`: Number of steps to consider for rejection rate.
+- `decay_rate`: Factor to reduce stiffness when non-stiff behavior is detected.
+- `stable_steps`: Number of stable steps before applying decay.
+- `recompute_jacobian_interval`: Minimum steps between Jacobian recomputations.
+
+### Effects
+- Updates `sa.stiffness_ratio`, `sa.is_stiff`, and `sa.stable_count` in-place.
+- Recomputes `sa.jacobian` if necessary and allowed.
 """
-function update_stiffness!(sa::SystemAnalysis, step_info; 
-        dyn_weights=(1.0,1.0,1.0), dyn_max=log10(101), thresh=100, history=10,
-        decay_rate=0.9, stable_steps=5)
+function update_stiffness!(sa::SystemAnalysis, step_info::Core.StepInfo; 
+        dyn_weights=(0.5,0.5,0.5,0.5), dyn_max=log10(101), thresh=100, history=10,
+        decay_rate=0.9, stable_steps=5, recompute_jacobian_interval=20)
     # Dynamic indicators
     shrink = max(0.0, step_info.dt_prev > 0 ? log10(step_info.dt_prev/step_info.dt) : 0.0)
     rejects = step_info.rejects / history
     du = step_info.du
     Ddyn = maximum(abs.(du)) / max(1e-12, minimum(abs.(du[abs.(du) .> 0])))
 
-    # Raw dynamic score
-    raw = dyn_weights[1]*shrink + dyn_weights[2]*log10(1+rejects) + dyn_weights[3]*log10(1+Ddyn)
+    # Gershgorin spectral bound
+    G = 0.0
+    if sa.jacobian !== nothing
+        G = gershgorin_spectral_bound(sa.jacobian)
+    end
+
+    # Recompute Jacobian if significant change detected and interval elapsed
+    if sa.current_step - get(sa, :last_jacobian_update, 0) >= recompute_jacobian_interval
+        update_flags = Analysis.needs_analysis_update!(sa, step_info)
+        if update_flags.stiffness && sa.jacobian !== nothing
+            try
+                sa.jacobian = Utilities.Jacobians.compute_jacobian(
+                    step_info.prob.f, step_info.u, step_info.prob.p, step_info.t)
+                sa.jacobian = sa.is_sparse ? sparse(sa.jacobian) : sa.jacobian
+                sa.last_jacobian_update = sa.current_step
+                G = gershgorin_spectral_bound(sa.jacobian)
+            catch e
+                @warn "Jacobian recomputation failed: $e. Using cached Jacobian."
+            end
+        end
+    end
+
+    # Combine indicators
+    raw = (dyn_weights[1]*shrink + dyn_weights[2]*log10(1+rejects) + 
+           dyn_weights[3]*log10(1+Ddyn) + dyn_weights[4]*log10(1+G))
     dyn_score = clamp(raw / dyn_max * 10000, 0, 10000)
 
-    # Decide if system is showing non-stiff behavior
+    # Update stiffness with decay for non-stiff behavior
     if dyn_score < thresh/2
         sa.stiffness_ratio *= decay_rate
-        sa.stable_count = get(sa, :stable_count, 0) + 1
+        sa.stable_count += 1
     else
         sa.stable_count = 0
-        # Combine with previous
         sa.stiffness_ratio = clamp((sa.stiffness_ratio + dyn_score)/2, 0, 10000)
     end
 
     sa.is_stiff = sa.stiffness_ratio >= thresh
-
     return nothing
 end
 

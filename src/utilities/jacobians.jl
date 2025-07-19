@@ -1,6 +1,4 @@
-module Utilities.Jacobians
-
-export finite_difference_jac, compute_jacobian
+# jacobians.jl
 
 """
     finite_difference_jac(f, u, p) -> J
@@ -53,5 +51,3 @@ function compute_jacobian(f, u, p, t)
         end
     end
 end
-
-end # module Utilities.Jacobians
