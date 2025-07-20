@@ -142,88 +142,243 @@ Concrete Core Types:
 
 [DONE] MonsterSolver{T} – Entry-point solver type
 
+struct Frankenstein{AD, LS} <: AbstractMonsterSolver
+    autodiff::AD  # Symbol (:auto, :forwarddiff, etc.) or AbstractADType
+    linsolve::LS  # LinearSolve solver instance or nothing
+    stiff_threshold::Float64
+    split::Bool
+    prefer_explicit::Bool
+end
+
 [DONE] SystemAnalysis{T} – Encapsulates system structure, stiffness, and scale
+
+struct SystemAnalysis{T}
+    stiffness_ratio::T
+    sparsity_pattern::Any
+    timescales::Vector{T}
+    coupling_strength::T
+    condition_number::T
+    system_size::Int
+    is_sparse::Bool
+    jacobian::Union{Matrix{T}, Nothing}
+    stable_count::Int
+    last_update_step::Int  # New field
+    current_step::Int      # New field
+    last_norm_du::T       # New field
+    history::Int          # New field
+end
 
 [DONE] SolverConfiguration{T} – Contains all solver parameters and choices
 
-[DONE] PerformanceProfile{T} – Performance summary for a solve
+struct SolverConfig{Alg}
+  algorithm::Alg
+  reltol::Float64
+  abstol::Float64
+  options::NamedTuple
+end
 
-[DONE] AdaptationState{T} – State store for adaptation logic
+
+
+[IN PROGRESS] PerformanceProfile{T} – Performance summary for a solve
+
+mutable struct PerformanceProfile{T}
+    solve_time_s::T
+    num_steps::Int
+    num_f_evals::Int
+    num_jac_evals::Int
+    num_linsolves::Int
+    num_step_rejects::Int
+end
+
+[IN PROGRESS] AdaptationState{T} – State store for adaptation logic
+
+mutable struct AdaptationState{T, Alg <: SciMLBase.SciMLAlgorithm}
+    current_solver::Alg
+    stiffness_history::Vector{T}
+    last_switch_time::T
+    # ... other state needed for adaptation
+end
 
 🧠 3. System Analysis Module (analysis/)
-Files:
+📂 Files and Responsibilities
+File	Purpose
+✅ sparsity_analysis.jl	Detect structural sparsity (Jacobian pattern, connectivity graph)
+✅ stiffness_analysis.jl	Estimate system stiffness (via eigenvalue heuristics)
+⚠️ Needs better ADType integration
+✅ timescale_analysis.jl	Decompose fast/slow dynamics using Jacobian spectrum
+✅ coupling_analysis.jl	Quantify reaction–diffusion and variable coupling
+✅ condition_analysis.jl	Estimate Jacobian condition number and sensitivity
+⚠️ Expensive: may require inversion
 
-[DONE] sparsity_analysis.jl – Detect sparse structures
+🔑 Core Functions
+Each function performs a focused structural or dynamic assessment. Their outputs populate fields in a shared SystemAnalysis{T} struct.
 
-[DONE] stiffness_analysis.jl – Eigenvalue-based stiffness detection   !!! Needs better ADTypes integration
+Function	Description
+✅ analyze_system_structure(f, u0, p)	Runs all core analyses and returns SystemAnalysis{T} object
+✅ detect_sparsity_patterns(f, u, p)	Identifies structural sparsity via finite difference or AD Jacobian
+✅ estimate_stiffness_spectrum(f, u, p)	Estimates stiffness metric ∈ [0, 10,000] via eigenvalue bounds (e.g., Gershgorin, dominant λ ratio)
+✅ identify_timescales(f, u, p)	Clusters Jacobian eigenvalues into distinct dynamic scales
+✅ assess_coupling_strength(f, u, p)	Measures inter-component coupling using off-diagonal norms
+⚠️ estimate_condition_number(f, u, p)	Approximates condition number of Jacobian; may invert J (costly)
 
-[DONE] timescale_analysis.jl – Fast/slow decomposition
+🧩 Design Notes
+Unified Interface: All analysis functions take the same inputs: f, u, p. This enables easy batch execution from a controller like analyze_system_structure.
 
-[DONE] coupling_analysis.jl – Reaction–diffusion coupling metrics
+Composable Outputs: Results are returned via a SystemAnalysis{T} struct, designed to support downstream adaptation logic and solver switching.
 
-[INVERTS A WHOLE JACOBIAN] condition_analysis.jl – Condition number and Jacobian sensitivity
+Jacobian Source: All functions rely on a Jacobian approximation (finite difference or AD). This will be swapped automatically depending on user configuration and backend availability.
 
-Key Functions:
+Performance Awareness:
 
-[DONE] analyze_system_structure() – Run full analysis
+⚠️ Expensive functions like condition_analysis.jl and full eigenvalue decompositions are deferred or rate-limited by dynamic triggers (e.g., high stiffness change).
 
-[DONE] detect_sparsity_patterns() – Detect sparse subsystems
+Light heuristics (e.g. rejection count, du/dt spikes) are evaluated per step, while expensive matrix ops are guarded by thresholds.
 
-[DONE] estimate_stiffness_spectrum() – Approximate stiffness metrics
+💡 Future Ideas
+Adaptive Refresh: Allow partial re-analysis mid-integration when stiffness, sparsity, or timescale properties shift significantly.
 
-[DONE] identify_timescales() – Multi-scale time dynamics
+Sparse-Aware Condition Estimation: Replace brute-force inversion with sparse iterative norm estimation.
 
-[DONE] assess_coupling_strength() – Quantify inter-variable coupling
+Symbolic Pre-analysis: If using Symbolics.jl, precompute sparsity/coupling at compile time.
+
+Benchmark Flags: Tag each analysis with its runtime cost and "suggested refresh rate" (e.g. every 10s, or on drastic stiffness shifts).
 
 🧱 4. Backend Management (backends/)
-Files:
+📂 Files and Roles
+File	Purpose
+✅ backend_interface.jl	Defines core abstract interfaces for AD and linear solver backends
+✅ linsolve_interface.jl	Wrapper interface for plugging in custom or package-based linear solvers
+✅ AD_interface.jl	Abstract interface for automatic differentiation backends
+✅ sparse_forwarddiff.jl	ForwardDiff-based Jacobian computation with sparsity exploitation
+✅ enzyme_backend.jl	Enzyme.jl backend for forward/reverse-mode AD with low overhead
+✅ finite_difference.jl	Finite difference fallback (no AD or symbolic support required)
+✅ symbolic_backend.jl	Integration with Symbolics.jl for symbolic Jacobians when available
+✅ hybrid_backend.jl	Compose multiple backends (e.g., symbolic + AD + fallback) adaptively
+✅ backend_selector.jl	Heuristics to select and switch between AD and linear solvers at runtime
 
-[DONE] backend_interface.jl – Core backend interface
+🧠 Key Features
+Unified Interfaces: Every backend implements the same interface (e.g. compute_jacobian(f, u, p)), making switching trivial.
 
-[DONE] linsolve_interface.jl – Linear solver backend control
+Fallbacks Built-in: If AD fails (e.g., for control flow-heavy code), the system automatically falls back to finite difference.
 
-[DONE] AD_interface.jl – Abstract AD backend interface
+Sparsity Awareness: Sparse versions of AD (like ForwardDiff+SparseDiffTools) or symbolic sparsity are used when detected.
 
-[DONE] sparse_forwarddiff.jl – ForwardDiff with sparsity support
+Hybrid Strategies: Combine multiple Jacobian backends (e.g., use symbolic for sparse blocks, AD for dense blocks).
 
-[DONE] enzyme_backend.jl – Enzyme.jl implementation
+Runtime Switching:
 
-[DONE] finite_difference.jl – Fallback finite difference backend
+Performance-driven: Profiled Jacobian evaluation time guides backend switching.
 
-[DONE] symbolic_backend.jl – Symbolics.jl backend
+Memory-aware: Large, dense systems may avoid symbolic or full AD if memory-constrained.
 
-[DONE] hybrid_backend.jl – Backend switching logic
+Backend Recommendations:
 
-[DONE] backend_selector.jl – Heuristic and performance-based backend choice
+Small/Non-stiff: ForwardDiff or finite differences.
 
-🧮 5. Solver Strategies (solvers/)
+Medium, Sparse: Symbolics or ForwardDiff with sparsity.
 
-[DONE]
+Stiff/Large: Enzyme, Symbolics, or hybrid fallback.
 
-🧬 6. Adaptation Framework (adaptation/)
-Files:
+🧰 Future Ideas
+GPU-aware AD backend registration (e.g. CUDA AD)
 
-performance_adaptation.jl
+Benchmark-based backend tuning (store previous timings)
 
-stability_adaptation.jl
+Backend failure diagnostics (warn users about silent fallbacks)
 
-convergence_adaptation.jl
+Backend cost modeling: build a predictive model for jacobian_cost(f, u, backend) to optimize runtime selection
 
-memory_adaptation.jl
+⚙️ 5. Automatic Solver Selection
+The Solvers module in Frankenstein.jl provides a modular, extensible strategy system for automatic algorithm selection based on the structure and dynamics of a differential system.
 
-parallel_adaptation.jl
+🧠 Strategy Overview
+Rather than relying on hardcoded rules, Frankenstein uses an extensible set of solver strategies, each contributing ranked algorithm recommendations tailored to specific system characteristics (e.g., stiffness, sparsity, multiscale behavior).
 
-hybrid_adaptation.jl
+📦 Included Strategy Modules
+Module File	Solver Strategy Handled
+explicit_solvers.jl	Fast methods for nonstiff ODEs
+stiff_solvers.jl	Implicit/stiff ODE solvers
+composite_solvers.jl	Switching & splitting methods
+multiscale_solvers.jl	Two-timescale/multirate solvers
+sparse_solvers.jl	Solvers tuned for sparse Jacobians
+adaptive_solvers.jl	Tolerance-sensitive selection
+parallel_solvers.jl	Multithreaded/distributed solvers
+specialty_solvers.jl	Delay, hybrid, or unusual cases
 
-Mechanisms:
+🧬 Recommendation Flow
+julia
+Kopiëren
+Bewerken
+using Solvers
 
-Backend Switching: Based on runtime + sparsity
+# Step 1: Analyze the system
+analysis = analyze_system_structure(prob)
 
-Solver Switching: Based on stiffness/local dynamics
+# Step 2: Choose a solver strategy
+rec = select_best_algorithm(analysis; rtol=1e-6, abstol=1e-9)
 
-Step Size Control: Generalization of dt-adaptation
+# Step 3: Create a solver configuration
+config = create_solver_configuration(rec)
 
-Preconditioner Retuning: Structure-aware updates
+# Step 4: Use the selected algorithm with DifferentialEquations.jl
+sol = solve(prob, config.algorithm; reltol=config.reltol, abstol=config.abstol)
+Each strategy implements its own get_*_recommendations function and contributes to a unified ranking of candidates, which are then selected based on compatibility and performance scores.
+
+💡 Custom Strategies
+You can define your own solver strategies by subtyping AbstractSolverStrategy and implementing the get_recommendations(::YourStrategy, analysis) method. Then call:
+
+julia
+Kopiëren
+Bewerken
+select_algorithm(analysis; strategies=[YourStrategy(), …])
+to include it in the selection flow.
+
+🧬 6. Adaptive Solver Framework
+Our solver engine now includes a modular Adaptation Framework to dynamically adjust solver behavior during integration. Based on real-time analysis of system properties (e.g., stiffness, sparsity, coupling), the framework enables intelligent switching of solver strategies and backend components.
+
+🔄 Key Features
+Solver Switching – Selects between stiff/non-stiff integrators based on local dynamics.
+
+Backend Adaptation – Switches between AD types, linear solvers, or GPU modes depending on runtime profiling.
+
+Step Size + Order Control – Generalizes dt adaptation based on local convergence properties.
+
+Preconditioner Retuning – Reacts to structural Jacobian changes.
+
+Memory Sensitivity – Responds to system size and runtime memory pressure.
+
+Parallel/Thread Optimization – Adapts multithreading and distributed solver parameters.
+
+📁 Modules
+Each adaptation mechanism is modular and lives in src/adaptation/:
+
+File	Mechanism
+performance_adaptation.jl	Runtime tuning, backend switching
+stability_adaptation.jl	Stiffness-aware solver control
+convergence_adaptation.jl	Error-driven step/order regulation
+memory_adaptation.jl	Low-memory solver selection
+parallel_adaptation.jl	Thread/distributed tuning
+hybrid_adaptation.jl	Composes multiple strategies
+
+🚀 Usage
+julia
+Kopiëren
+Bewerken
+using Adaptation
+
+# Compose hybrid adaptation strategy
+strategy = HybridAdaptation(
+    PerformanceAdaptation(),
+    StabilityAdaptation(10.0),
+    ConvergenceAdaptation(1e-3),
+    MemoryAdaptation(512_000_000),
+    ParallelAdaptation(8),
+)
+
+# Plug into solver recommendation flow
+recommendation = select_algorithm(analysis)
+updated_rec = adapt!(strategy, analysis, recommendation)
+For fine-grained updates, call needs_analysis_update!(...) during stepping to determine which adaptation strategies to invoke.
 
 🧪 7. Preconditioning System (preconditioning/)
 Files:

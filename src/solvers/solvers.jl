@@ -1,6 +1,13 @@
 # Frankenstein.jl Solver Strategies Module Structure
-# 
-# This is the main interface file that ties together all solver strategy modules
+
+"""
+Solvers — automatic solver selection for ODE systems
+
+1. Build up a `SystemAnalysis`
+2. Call `select_best_algorithm(analysis; rtol, abstol, prefs…)`
+3. Pass the returned `AlgorithmRecommendation` into `create_solver_configuration`
+4. Use the resulting config in `solve(prob, config.algorithm; reltol=config.reltol, …)`
+"""
 
 module Solvers
 
