@@ -25,28 +25,34 @@ end
 
 Choose the best backend combination based on problem characteristics.
 """
-function choose_backend(problem_size::Int, sparsity_ratio::Float64, is_stiff::Bool, 
-                       available_backends::Vector{AbstractADType})
-    
-    best_backend = nothing
-    best_score = -Inf
+function choose_backend(analysis::SystemAnalysis{T}, 
+                        available_backends::Vector{AbstractADType}) where T
+
+    best_backend  = nothing
+    best_score    = -Inf
     best_rationale = ""
-    
+
+    # Extract all needed inputs from the analysis object
+    n       = analysis.system_size
+    is_sp   = analysis.is_sparse
+    sparsity = is_sp ? nnz(analysis.jacobian) / (n^2) : 0.0
+    stiff   = analysis.stiffness_ratio > 1000.0 
+
     for backend in available_backends
-        score = evaluate_backend_score(backend, problem_size, sparsity_ratio, is_stiff)
-        
+        score = evaluate_backend_score(backend, n, sparsity, stiff)
         if score > best_score
-            best_score = score
-            best_backend = backend
-            best_rationale = generate_rationale(backend, problem_size, sparsity_ratio, is_stiff)
+            best_score     = score
+            best_backend   = backend
+            best_rationale = generate_rationale(backend, n, sparsity, stiff)
         end
     end
-    
-    # Select appropriate linear solver
-    linear_solver = select_linear_solver_for_backend(best_backend, problem_size, sparsity_ratio, is_stiff)
-    
-    return BackendSelection(best_backend, linear_solver, best_score, best_rationale)
+
+    # Pick the best linear solver for that backend
+    lin_solver = select_linear_solver_for_backend(best_backend, n, sparsity, stiff)
+
+    return BackendSelection(best_backend, lin_solver, best_score, best_rationale)
 end
+
 
 """
     evaluate_backend_score(backend, problem_size, sparsity_ratio, is_stiff)

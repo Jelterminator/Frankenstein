@@ -4,7 +4,7 @@ using SciMLBase
 
 # Export public API for other modules
 export Frankenstein,
-       SystemAnalysis,
+       SystemAnalysis, StepInfo,
        SolverConfiguration,
        PerformanceProfile,
        AdaptationState,
@@ -15,6 +15,9 @@ export Frankenstein,
        AbstractSplittingMethod,
        AbstractAdaptationStrategy,
        AbstractPerformanceMonitor
+
+# Exported API
+export solve
 
 #==============================================================================#
 # Abstract Types
@@ -90,20 +93,47 @@ components from the SciML ecosystem.
   for moderately stiff problems. Default is `false`.
 """
 
-struct Frankenstein{AD, LS} <: AbstractMonsterSolver
-    autodiff::AD  # Symbol (:auto, :forwarddiff, etc.) or AbstractADType
-    linsolve::LS  # LinearSolve solver instance or nothing
-    stiff_threshold::Float64
-    split::Bool
-    prefer_explicit::Bool
+
+# Frankenstein solver type
+struct Frankenstein{T} <: OrdinaryDiffEqAlgorithm
+    configuration::SolverConfiguration
+    analysis::SystemAnalysis
+    adaptation::AdaptationState
 end
 
-# Keyword-based constructor with default values
-function Frankenstein(; autodiff=:auto, linsolve=nothing, stiff_threshold=1e4,
-                        split=false, prefer_explicit=false)
-    return Frankenstein{typeof(autodiff), typeof(linsolve)}(
-        autodiff, linsolve, Float64(stiff_threshold), split, prefer_explicit
-    )
+# Constructor
+"""
+Create a Frankenstein solver with a default adaptation strategy.
+"""
+function Frankenstein()
+    analysis = SystemAnalysis()
+    config_alg = select_best_algorithm(analysis)
+    config_backend = choose_backend(analysis)
+    default_strat = PerformanceAdaptation(1.0)
+    return Frankenstein{T}(analysis, SolverConfiguration(config_alg, config_backend.ad_backend, config_backend.linear_solver),default_strat) 
+end
+
+# Solve dispatch
+function solve(prob::ODEProblem{T}, Fs::Frankenstein; kwargs...) where T
+    # initialize analysis
+    Fs.analysis = SystemAnalysis()
+    Fs.adaptation.history = Any[]
+
+    # wrap callback to record StepInfo
+    function record_step(sol)
+        info = StepInfo(sol.t, sol.dt, sol.accepted ? sol.retval : Inf)
+        push!(Fs.analysis.history, info)
+    end
+
+    cb = StepCallback((u,t,integrator) -> record_step(integrator), save_positions=(false,false))
+
+    # choose initial algorithm based on adaptation state
+    alg = Fs.adaptation.current_strategy isa AbstractAdaptationStrategy ? Tsit5() : Tsit5()
+
+    # call DifferentialEquations solve
+    sol = DifferentialEquations.solve(prob, alg; callback=cb, kwargs...)
+
+    return sol
 end
 
 """
@@ -153,13 +183,11 @@ end
 Contains all the configured components (solvers, backends, etc.)
 chosen by Frankenstein for a specific problem.
 """
-struct SolverConfiguration{StiffAlg, NonStiffAlg, AD, LS, P, Strat}
-    stiff_solver::StiffAlg
-    nonstiff_solver::NonStiffAlg
+struct SolverConfiguration{Alg, AD, LS}
+    solver::Alg
     ad_backend::AD
     linear_solver::LS
-    preconditioner::P
-    strategy::Strat
+    # add preconditioner support later
 end
 
 """
@@ -187,11 +215,11 @@ end
 A mutable struct holding the state required for adaptive logic during integration.
 This would typically be part of the integrator's cache.
 """
-mutable struct AdaptationState{T, Alg <: SciMLBase.SciMLAlgorithm}
-    current_solver::Alg
-    stiffness_history::Vector{T}
-    last_switch_time::T
-    # ... other state needed for adaptation
+struct AdaptationState
+    current_strategy::AbstractAdaptationStrategy
+    history::Vector{Any}
+    # additional fields: thresholds, counters
+    AdaptationState(strategy::AbstractAdaptationStrategy) = new(strategy, Any[])
 end
 
 end # module Core

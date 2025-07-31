@@ -1,4 +1,3 @@
-## adaptation/stability_adaptation.jl
 module StabilityAdaptation
 
 using ..Core: SystemAnalysis
@@ -14,8 +13,32 @@ struct StabilityAdaptation <: AbstractAdaptationStrategy
     stiffness_threshold::Float64
 end
 
+"""
+    adapt!(strategy::StabilityAdaptation, analysis::SystemAnalysis, rec::AlgorithmRecommendation)
+
+Monitor system stiffness and update the algorithm recommendation if stability is at risk.
+"""
 function adapt!(strategy::StabilityAdaptation, analysis::SystemAnalysis, rec::AlgorithmRecommendation)
-    # 1. Monitor local stiffness estimates
-    # 2. If stiffness exceeds threshold, switch to more stable implicit method
+    # 1. Estimate current stiffness metric from analysis
+    local_stiffness = getfield(analysis, :stiffness_ratio)
+
+    # 2. If stiffness exceeds threshold, switch to a more stable implicit solver
+    if local_stiffness > strategy.stiffness_threshold
+        # Log or mark the adaptation
+        println("[StabilityAdaptation] High stiffness detected: ", local_stiffness,
+                " > ", strategy.stiffness_threshold)
+
+        # Create a new recommendation: 
+        new_algo =select_best_algorithm(analysis)  
+        # Preserve existing tolerance and other parameters if present
+        params = hasproperty(rec, :params) ? rec.params : Dict{Symbol,Any}()
+        params[:method] = new_algo
+
+        return AlgorithmRecommendation(new_algo; params...)
+    end
+
+    # Otherwise, leave recommendation unchanged
     return rec
 end
+
+end # module StabilityAdaptation

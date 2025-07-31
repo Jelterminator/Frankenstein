@@ -1,532 +1,446 @@
+Frankenstein.jl 🧠⚡
+==================
 
-Frankenstein.jl
-===============
+The Monster Solver Algorithm™ — compositional, adaptive, and nearly sentient. Built from the best stiff and non-stiff solvers in the Julia ecosystem, Frankenstein dynamically assembles the ideal solver strategy for your problem using intelligent heuristics and modular adaptation.
 
-The Monster Solver Algorithm™ — stitched from the best methods, tuned for every problem, and unleashed through solve().
-
-What Is It?
------------
-Frankenstein.jl is a compositional, adaptive, and nearly sentient ODE algorithm that plugs directly into DifferentialEquations.jl:
+What is Frankenstein.jl?
+-------------------------
+Frankenstein.jl is a black-box ODE solver that works seamlessly with DifferentialEquations.jl:
 
     sol = solve(prob, Frankenstein())
 
-It’s not a new method. It’s a carefully stitched-together super-algorithm built from existing, battle-tested components:
+Rather than reinventing integration methods, Frankenstein stitches together:
 
-- Best-in-class stiff and non-stiff solvers
-- AD-aware linear solver configuration
-- Full problem analysis pipeline (stiffness, sparsity, coupling)
-- Preconditioners, backend selectors, and adaptive strategies
-- A black box — you don’t need to know what’s going on under the hood
+- Best-in-class Julia solvers (e.g. Tsit5, Rodas5, KenCarp4, CVODE)
+- Smart adaptation strategies (memory-based, hybrid, convergence-aware)
+- Backend selectors and preconditioners
+- Automated problem analysis: stiffness, sparsity, scaling
 
-I am writing this module while waiting for my integration to finish, so that is why.
-
-Goals
------
-- Auto-adaptivity: detect stiffness, sparsity, coupling, scaling
-- Composite assembly: combines Tsit5, Rodas5, KenCarp4, CVODE, etc.
-- Backend smarts: picks AD method, linear solver, step size controller
-- Plug-and-play: works as a solve(prob, Frankenstein()) drop-in
-- Built from existing parts: leverages SciML, not reinvents it
-
-Vision
-------
-Frankenstein.jl is for people who:
-- Don’t want to tune solvers by hand
-- Don’t want to choose between stiff and non-stiff methods
-- Want their ODE problems solved fast and correctly
-- Are okay with the solver being a little... alive
-
-Architecture
-------------
-Frankenstein is structured modularly:
-
-Frankenstein/
-├── src/
-│   ├── Frankenstein.jl              # Main module
-│   ├── core/                        # Algorithm orchestration
-│   ├── analysis/                    # Stiffness, sparsity, etc.
-│   ├── backends/                    # AD and linear solvers
-│   ├── solvers/                     # Method selection logic
-│   ├── adaptation/                  # Adaptive method switching
-│   ├── preconditioning/             # Matrix handling
-│   ├── splitting/                   # Operator splitting support
-│   ├── monitoring/                  # Performance profiling
-│   └── utilities/                   # Misc support
-
-Usage
------
-Install locally (for now):
-
-    ] dev path/to/Frankenstein
-
-Then use it like any other algorithm:
-
-    using DifferentialEquations, Frankenstein
-
-    prob = ODEProblem(f, u0, tspan, p)
-    sol = solve(prob, Frankenstein())
-
-Behind the Scenes
+Project Structure
 -----------------
-Calling solve(prob, Frankenstein()) will:
-1. Analyze the problem (sparsity, stiffness, stiffness ratio, Jacobian structure)
-2. Configure the solver strategy based on those metrics
-3. Choose appropriate backends: AD (ForwardDiff, Enzyme, Symbolics, Sparse), linsolve, preconditioner
-4. Launch the solver with automated adaptation (e.g., method switching mid-integration)
 
-What You Control
-----------------
-The default behavior is "just work", but advanced users can override:
+| Module/File                                | Purpose                                                            | Status          |
+| -------------------------------------------| ------------------------------------------------------------------ | --------------- |
+| `Frankenstein.jl`                          | Entry point, sets up integration and solver composition            | ⚠️ Partial      |
+| `MonsterSolver.jl`                         | The composite adaptive solver algorithm                            | ⚠️ Partial      |
+| `adaptation/`                              | Framework for adaptation strategies                                | ✅ Complete     |
+| ├── `adaptation.jl`                        | Dispatcher for adaptation modules                                  | ✅ Complete     |
+| ├── `convergence_adaptation.jl`            | Adjusts based on solver convergence                                | ✅ Near-complete|
+| ├── `memory_adaptation.jl`                 | Learns from previous steps for better adaptation                   | ✅ Mostly done  |
+| ├── `hybrid_adaptation.jl`                 | Blends strategies dynamically                                      | ⚠️ Partial      |
+| ├── `parallel_adaptation.jl`               | Enables distributed adaptation strategies                          | ⚠️ Partial      |
+| ├── `performance_adaptation.jl`            | Adjusts strategy based on runtime performance                      | ✅ Mostly done  |
+| └── `stability_adaptation.jl`              | Ensures numerical stability during adaptation                      | ✅ Near-complete|
 
-    Frankenstein(; autodiff=:enzyme, stiff_threshold=300, prefer_explicit=true)
+| `analysis/`                                | Tools for analyzing model dynamics and structure                   | ✅ Complete     |
+| ├── `analysis.jl`                          | Main entry for analysis tools                                      | ✅ Complete     |
+| ├── `condition_analysis.jl`                | Checks for well-conditioning of problems                           | ✅ Near-complete|
+| ├── `coupling_analysis.jl`                 | Analyzes coupling strength between equations                       | ✅ Near-complete|
+| ├── `sparsity_analysis.jl`                 | Inspects sparsity patterns in Jacobians or systems                 | ✅ Complete     |
+| ├── `stiffness_analysis.jl`                | Identifies stiff regions in the problem                            | ✅ Complete     |
+| └── `timescale_analysis.jl`                | Detects time scale separation                                      | ✅ Near-complete|
 
-Options will include:
-- autodiff: :forwarddiff, :enzyme, :symbolic, :none
-- linsolve: custom linear solver selection
-- stiff_threshold: what stiffness ratio counts as stiff
-- split: enable/disable operator splitting
+| `backends/`                                | Backend implementations for automatic differentiation, etc.        | ✅ Complete     |
+| ├── `AD_interface.jl`                      | General interface for AD tools                                     | ✅ Complete     |
+| ├── `enzyme_backend.jl`                    | Enzyme-based AD backend                                            | ✅ Mostly done  |
+| ├── `hybrid_backend.jl`                    | Combines multiple backend strategies                               | ⚠️ Partial      |
+| ├── `symbolic_backend.jl`                  | Symbolic differentiation support                                   | ✅ Near-complete|
+| ├── `finite_difference.jl`                 | Fallback for finite-diff Jacobian computation                      | ✅ Complete     |
+| ├── `sparse_forwarddiff.jl`                | Sparse-forward-mode AD                                             | ✅ Complete     |
+| └── `linsolve_interface.jl`                | Linear solver abstraction                                          | ✅ Complete     |
 
-Status
-------
-Feature                     | Status
-----------------------------|---------
-Basic composite solver     | Ready for testing
-Stiffness detection        | Ready for testing
-Backend selection          | Ready for testing
-Solver switching           | Planned
-Preconditioning            | Planned
-Splitting + parallelism    | Planned
-Docs and examples          | Planned
+| `core/`                                    | Core framework utilities                                           | ✅ Complete     |
+| └── `core.jl`                              | Central utilities and shared abstractions                          | ✅ Complete     |
 
-Philosophy
+| `monitoring/`                              | Tools for observing solver behavior                                | ✅ Complete     |
+| └── `monitoring.jl`                        | Implements monitoring callbacks and logs                           | ✅ Complete     |
+
+| `preconditioning/`                         | Preconditioner implementations                                     | ✅ Near-complete|
+| └── `preconditioning.jl`                   | Main entry for preconditioning logic                               | ✅ Complete     |
+
+| `solvers/`                                 | All solvers and algorithm modules                                  | ✅ Extensive    |
+| ├── `adaptive_solvers.jl`                  | Solvers that adapt time steps and methods                          | ✅ Mostly done  |
+| ├── `algorithm_selector.jl`                | Picks appropriate solver from options                              | ✅ Complete     |
+| ├── `base_types.jl`                        | Core types used by all solvers                                     | ✅ Complete     |
+| ├── `composite_solvers.jl`                 | Combine solvers in modular way                                     | ✅ Near-complete|
+| ├── `explicit_solvers.jl`                  | Explicit integration methods                                       | ✅ Complete     |
+| ├── `multiscale_solvers.jl`                | Handle systems with multiple scales                                | ✅ Mostly done  |
+| ├── `sparse_solvers.jl`                    | Exploit sparsity in system structure                               | ✅ Mostly done  |
+| ├── `specialty_solvers.jl`                 | Domain-specific or edge-case solvers                               | ⚠️ Partial      |
+| ├── `stiff_solvers.jl`                     | Solvers for stiff systems                                          | ✅ Near-complete|
+| └── `solvers.jl`                           | General solver dispatching                                         | ✅ Complete     |
+
+| `splitting/`                               | Strategies for operator splitting                                  | ✅ Mostly done  |
+| └── `splitting.jl`                         | Implements and manages splitting techniques                        | ✅ Mostly done  |
+
+| `utilities/`                               | Helper utilities across the project                                | ✅ Complete     |
+| ├── `jacobians.jl`                         | Jacobian estimation and handling                                   | ✅ Complete     |
+| ├── `logging.jl`                           | Internal logging support                                           | ✅ Complete     |
+| └── `utilities.jl`                         | Miscellaneous utility functions                                    | ✅ Complete     |
+
+
+Usage (Planned)
+---------------
+After package registration:
+
+    using Frankenstein, DifferentialEquations
+
+    prob = ODEProblem(f, u0, tspan)
+    sol = solve(prob, Frankenstein())
+
+
+To-Do List
 ----------
-"You don’t need to know if your problem is stiff. That’s Frankenstein’s job."
 
-Frankenstein.jl is a toolkit for automating solver choice, not writing new solvers. It glues together the amazing work in SciML and tries to act like a smart default.
+=== MonsterSolver.jl ===
 
+[] Implement light analysis that determines if analysis update is required
 
-About the Name
---------------
-Like the original Frankenstein’s monster, this solver is made from existing bodies. It's alive, it’s fast, and it might be slightly cursed — but it gets the job done.
+[] Implement if/then structure for adaptation
 
+=== ADAPTATION ===
 
-The Big TO-DO
--------------
-✅ 1. Goals
-Black-box usability with automatic stiffness detection, backend selection, event handling, and adaptation
+General / Cross‑Cutting
 
-Fast, non-intrusive integration into the existing SciML interface
+[ ] Define a common interface for all AbstractAdaptationStrategy implementations
 
-Minimal reinvention: built from Frankenstein-style compositing of existing SciML components
+1. when analysis object gets updated
+2. appropiate type of adaptation strategy updates their scored algorithm suggestion
+3. choice for an algorithm
+4. solver method update
 
-Pluggable, extensible, and performance-aware architecture
+[ ] Wire each strategy into the central AdaptationController orchestration
 
-📦 2. Core Types and Abstractions
-Abstract Types:
+[ ] Add comprehensive unit tests for each strategy (edge cases, threshold crossings)
 
-[DONE] AbstractMonsterSolver – Top-level solver interface
+[ ] Standardize logging/output so users can trace each adaptation decision
 
-[DONE] AbstractADBackend – AD backend interface
+adaptation.jl
 
-[DONE] AbstractSolverStrategy – Solver strategy abstraction
+[ ] Implement the dispatcher that invokes each registered strategy in sequence
 
-[DONE] AbstractPreconditioner – Preconditioner interface
+[ ] Allow users to configure order or subset of strategies at runtime
 
-[DONE] AbstractSplittingMethod – Operator splitting framework
+[ ] Aggregate and expose a summary of all adaptations performed
 
-[DONE] AbstractAdaptationStrategy – Adaptation trigger logic
+convergence_adaptation.jl
 
-[DONE] AbstractPerformanceMonitor – Real-time monitoring hooks
+[ ] Hook into solver error callbacks to feed real‐time error estimates
 
-Concrete Core Types:
+[ ] Refine the error thresholds or introduce hysteresis to avoid flip‑flopping
 
-[DONE] MonsterSolver{T} – Entry-point solver type
+[ ] Support switching between method families in addition to order changes
 
-struct Frankenstein{AD, LS} <: AbstractMonsterSolver
-    autodiff::AD  # Symbol (:auto, :forwarddiff, etc.) or AbstractADType
-    linsolve::LS  # LinearSolve solver instance or nothing
-    stiff_threshold::Float64
-    split::Bool
-    prefer_explicit::Bool
-end
+memory_adaptation.jl
 
-[DONE] SystemAnalysis{T} – Encapsulates system structure, stiffness, and scale
+[ ] Implement a buffer to store recent step history and error data
 
-struct SystemAnalysis{T}
-    stiffness_ratio::T
-    sparsity_pattern::Any
-    timescales::Vector{T}
-    coupling_strength::T
-    condition_number::T
-    system_size::Int
-    is_sparse::Bool
-    jacobian::Union{Matrix{T}, Nothing}
-    stable_count::Int
-    last_update_step::Int  # New field
-    current_step::Int      # New field
-    last_norm_du::T       # New field
-    history::Int          # New field
-end
+[ ] Use past performance metrics to predict optimal next step sizes
 
-[DONE] SolverConfiguration{T} – Contains all solver parameters and choices
+[ ] Integrate a decay or forgetting factor so old data doesn’t dominate
 
-struct SolverConfig{Alg}
-  algorithm::Alg
-  reltol::Float64
-  abstol::Float64
-  options::NamedTuple
-end
+hybrid_adaptation.jl
 
+[ ] Design logic for blending multiple strategies’ recommendations
 
+[ ] Resolve conflicts when two strategies propose different algorithm changes
 
-[IN PROGRESS] PerformanceProfile{T} – Performance summary for a solve
+[ ] Expose weights or priorities so users can tune the hybrid behavior
 
-mutable struct PerformanceProfile{T}
-    solve_time_s::T
-    num_steps::Int
-    num_f_evals::Int
-    num_jac_evals::Int
-    num_linsolves::Int
-    num_step_rejects::Int
-end
+parallel_adaptation.jl
 
-[IN PROGRESS] AdaptationState{T} – State store for adaptation logic
+[ ] Enable strategy evaluation in parallel (e.g. test multiple candidate methods simultaneously)
 
-mutable struct AdaptationState{T, Alg <: SciMLBase.SciMLAlgorithm}
-    current_solver::Alg
-    stiffness_history::Vector{T}
-    last_switch_time::T
-    # ... other state needed for adaptation
-end
+[ ] Collect timing and error metrics from each trial to choose the best
 
-🧠 3. System Analysis Module (analysis/)
-📂 Files and Responsibilities
-File	Purpose
-✅ sparsity_analysis.jl	Detect structural sparsity (Jacobian pattern, connectivity graph)
-✅ stiffness_analysis.jl	Estimate system stiffness (via eigenvalue heuristics)
-⚠️ Needs better ADType integration
-✅ timescale_analysis.jl	Decompose fast/slow dynamics using Jacobian spectrum
-✅ coupling_analysis.jl	Quantify reaction–diffusion and variable coupling
-✅ condition_analysis.jl	Estimate Jacobian condition number and sensitivity
-⚠️ Expensive: may require inversion
+[ ] Fall back gracefully if parallel trials exceed resource/time budgets
 
-🔑 Core Functions
-Each function performs a focused structural or dynamic assessment. Their outputs populate fields in a shared SystemAnalysis{T} struct.
+performance_adaptation.jl
 
-Function	Description
-✅ analyze_system_structure(f, u0, p)	Runs all core analyses and returns SystemAnalysis{T} object
-✅ detect_sparsity_patterns(f, u, p)	Identifies structural sparsity via finite difference or AD Jacobian
-✅ estimate_stiffness_spectrum(f, u, p)	Estimates stiffness metric ∈ [0, 10,000] via eigenvalue bounds (e.g., Gershgorin, dominant λ ratio)
-✅ identify_timescales(f, u, p)	Clusters Jacobian eigenvalues into distinct dynamic scales
-✅ assess_coupling_strength(f, u, p)	Measures inter-component coupling using off-diagonal norms
-⚠️ estimate_condition_number(f, u, p)	Approximates condition number of Jacobian; may invert J (costly)
+[ ] Monitor runtime throughput and memory footprint per step
 
-🧩 Design Notes
-Unified Interface: All analysis functions take the same inputs: f, u, p. This enables easy batch execution from a controller like analyze_system_structure.
+[ ] Define performance‐based triggers to switch to faster or lighter solvers
 
-Composable Outputs: Results are returned via a SystemAnalysis{T} struct, designed to support downstream adaptation logic and solver switching.
+stability_adaptation.jl
 
-Jacobian Source: All functions rely on a Jacobian approximation (finite difference or AD). This will be swapped automatically depending on user configuration and backend availability.
+[ ] Flesh out more stability metrics (e.g. eigenvalue growth rate) alongside stiffness
 
-Performance Awareness:
+[ ] Add tests for known stiff benchmarks to validate automatic switching
 
-⚠️ Expensive functions like condition_analysis.jl and full eigenvalue decompositions are deferred or rate-limited by dynamic triggers (e.g., high stiffness change).
+=== ANALYSIS ===
 
-Light heuristics (e.g. rejection count, du/dt spikes) are evaluated per step, while expensive matrix ops are guarded by thresholds.
+General / Cross‑Cutting
 
-💡 Future Ideas
-Adaptive Refresh: Allow partial re-analysis mid-integration when stiffness, sparsity, or timescale properties shift significantly.
+[ ] Rework based on needs of adaptation
 
-Sparse-Aware Condition Estimation: Replace brute-force inversion with sparse iterative norm estimation.
+[ ] Write comprehensive unit tests for all analysis functions
 
-Symbolic Pre-analysis: If using Symbolics.jl, precompute sparsity/coupling at compile time.
+[ ] Add docstrings and usage examples to every function
 
-Benchmark Flags: Tag each analysis with its runtime cost and "suggested refresh rate" (e.g. every 10s, or on drastic stiffness shifts).
+[ ] Benchmark performance on representative problems
 
-🧱 4. Backend Management (backends/)
-📂 Files and Roles
-File	Purpose
-✅ backend_interface.jl	Defines core abstract interfaces for AD and linear solver backends
-✅ linsolve_interface.jl	Wrapper interface for plugging in custom or package-based linear solvers
-✅ AD_interface.jl	Abstract interface for automatic differentiation backends
-✅ sparse_forwarddiff.jl	ForwardDiff-based Jacobian computation with sparsity exploitation
-✅ enzyme_backend.jl	Enzyme.jl backend for forward/reverse-mode AD with low overhead
-✅ finite_difference.jl	Finite difference fallback (no AD or symbolic support required)
-✅ symbolic_backend.jl	Integration with Symbolics.jl for symbolic Jacobians when available
-✅ hybrid_backend.jl	Compose multiple backends (e.g., symbolic + AD + fallback) adaptively
-✅ backend_selector.jl	Heuristics to select and switch between AD and linear solvers at runtime
+analysis.jl
 
-🧠 Key Features
-Unified Interfaces: Every backend implements the same interface (e.g. compute_jacobian(f, u, p)), making switching trivial.
+[ ] Implement high‑level orchestration so it can run a full suite of analyses in one call
 
-Fallbacks Built-in: If AD fails (e.g., for control flow-heavy code), the system automatically falls back to finite difference.
+convergence_analysis.jl
 
-Sparsity Awareness: Sparse versions of AD (like ForwardDiff+SparseDiffTools) or symbolic sparsity are used when detected.
+[ ] Implement
 
-Hybrid Strategies: Combine multiple Jacobian backends (e.g., use symbolic for sparse blocks, AD for dense blocks).
+performance_analysis.jl
 
-Runtime Switching:
+[ ] Implement
 
-Performance-driven: Profiled Jacobian evaluation time guides backend switching.
+memory_analysis.jl
 
-Memory-aware: Large, dense systems may avoid symbolic or full AD if memory-constrained.
+[ ] Implement
 
-Backend Recommendations:
+condition_analysis.jl
 
-Small/Non-stiff: ForwardDiff or finite differences.
+[ ] Fill in robust computation of condition numbers (e.g. via SVD or power‑method estimators)
 
-Medium, Sparse: Symbolics or ForwardDiff with sparsity.
+[ ] Handle edge cases (singular or near‑singular Jacobians)
 
-Stiff/Large: Enzyme, Symbolics, or hybrid fallback.
+[ ] Return structured ConditionAnalysis object, not just a scalar
 
-🧰 Future Ideas
-GPU-aware AD backend registration (e.g. CUDA AD)
+coupling_analysis.jl
 
-Benchmark-based backend tuning (store previous timings)
+[ ] Define metric(s) for coupling strength (e.g. off‑diagonal norms)
 
-Backend failure diagnostics (warn users about silent fallbacks)
+[ ] Implement routines for block‑partitioned systems
 
-Backend cost modeling: build a predictive model for jacobian_cost(f, u, backend) to optimize runtime selection
+[ ] Add support for user‑provided grouping of variables
 
-⚙️ 5. Automatic Solver Selection
-The Solvers module in Frankenstein.jl provides a modular, extensible strategy system for automatic algorithm selection based on the structure and dynamics of a differential system.
+sparsity_analysis.jl
 
-🧠 Strategy Overview
-Rather than relying on hardcoded rules, Frankenstein uses an extensible set of solver strategies, each contributing ranked algorithm recommendations tailored to specific system characteristics (e.g., stiffness, sparsity, multiscale behavior).
+[ ] Compute sparsity patterns for Jacobian, mass matrices, etc.
 
-📦 Included Strategy Modules
-Module File	Solver Strategy Handled
-explicit_solvers.jl	Fast methods for nonstiff ODEs
-stiff_solvers.jl	Implicit/stiff ODE solvers
-composite_solvers.jl	Switching & splitting methods
-multiscale_solvers.jl	Two-timescale/multirate solvers
-sparse_solvers.jl	Solvers tuned for sparse Jacobians
-adaptive_solvers.jl	Tolerance-sensitive selection
-parallel_solvers.jl	Multithreaded/distributed solvers
-specialty_solvers.jl	Delay, hybrid, or unusual cases
+[ ] Provide summary statistics (density, bandwidth)
 
-🧬 Recommendation Flow
-julia
-Kopiëren
-Bewerken
-using Solvers
+[ ] Export sparsity pattern in standard formats (e.g. CSR)
 
-# Step 1: Analyze the system
-analysis = analyze_system_structure(prob)
+stiffness_analysis.jl
 
-# Step 2: Choose a solver strategy
-rec = select_best_algorithm(analysis; rtol=1e-6, abstol=1e-9)
+[ ] Estimate stiffness ratio (largest eigenvalue / smallest eigenvalue)
 
-# Step 3: Create a solver configuration
-config = create_solver_configuration(rec)
+[ ] Implement efficient eigen‑value estimators for large systems
 
-# Step 4: Use the selected algorithm with DifferentialEquations.jl
-sol = solve(prob, config.algorithm; reltol=config.reltol, abstol=config.abstol)
-Each strategy implements its own get_*_recommendations function and contributes to a unified ranking of candidates, which are then selected based on compatibility and performance scores.
+[ ] Flag time windows of high stiffness for use by adaptation strategies
 
-💡 Custom Strategies
-You can define your own solver strategies by subtyping AbstractSolverStrategy and implementing the get_recommendations(::YourStrategy, analysis) method. Then call:
+timescale_analysis.jl
 
-julia
-Kopiëren
-Bewerken
-select_algorithm(analysis; strategies=[YourStrategy(), …])
-to include it in the selection flow.
+[ ] Detect multiple scales via spectral gap analysis
 
-🧬 6. Adaptive Solver Framework
-Our solver engine now includes a modular Adaptation Framework to dynamically adjust solver behavior during integration. Based on real-time analysis of system properties (e.g., stiffness, sparsity, coupling), the framework enables intelligent switching of solver strategies and backend components.
+[ ] Suggest candidate multiscale solver configurations
 
-🔄 Key Features
-Solver Switching – Selects between stiff/non-stiff integrators based on local dynamics.
+[ ] Visualize dominant time‑scales over simulation interval
 
-Backend Adaptation – Switches between AD types, linear solvers, or GPU modes depending on runtime profiling.
+=== PRECONDITIONING ===
 
-Step Size + Order Control – Generalizes dt adaptation based on local convergence properties.
+General / Cross‑Cutting
 
-Preconditioner Retuning – Reacts to structural Jacobian changes.
+[ ] Define a clear API for preconditioners (apply!, setup!, teardown!)
 
-Memory Sensitivity – Responds to system size and runtime memory pressure.
+[ ] Integrate with the solver workflow so users can swap in/out preconditioners easily
 
-Parallel/Thread Optimization – Adapts multithreading and distributed solver parameters.
+[ ] Add unit tests for each preconditioner on standard linear‐solve benchmarks
 
-📁 Modules
-Each adaptation mechanism is modular and lives in src/adaptation/:
+[ ] Benchmark setup cost vs. solve speedup for various problem sizes
 
-File	Mechanism
-performance_adaptation.jl	Runtime tuning, backend switching
-stability_adaptation.jl	Stiffness-aware solver control
-convergence_adaptation.jl	Error-driven step/order regulation
-memory_adaptation.jl	Low-memory solver selection
-parallel_adaptation.jl	Thread/distributed tuning
-hybrid_adaptation.jl	Composes multiple strategies
+preconditioning.jl
 
-🚀 Usage
-julia
-Kopiëren
-Bewerken
-using Adaptation
+[ ] Implement AbstractPreconditioner abstract type with required methods
 
-# Compose hybrid adaptation strategy
-strategy = HybridAdaptation(
-    PerformanceAdaptation(),
-    StabilityAdaptation(10.0),
-    ConvergenceAdaptation(1e-3),
-    MemoryAdaptation(512_000_000),
-    ParallelAdaptation(8),
-)
+[ ] Provide a factory create_preconditioner(opts…) that picks based on matrix properties
 
-# Plug into solver recommendation flow
-recommendation = select_algorithm(analysis)
-updated_rec = adapt!(strategy, analysis, recommendation)
-For fine-grained updates, call needs_analysis_update!(...) during stepping to determine which adaptation strategies to invoke.
+[ ] Add ILU(k) and incomplete Cholesky options with tunable fill‐level parameters
 
-🧪 7. Preconditioning System (preconditioning/)
-Files:
+[ ] Support Jacobi, Gauss–Seidel, and block‑Jacobi simple preconditioners
 
-sparse_preconditioning.jl
+[ ] Expose callback hooks so adaptation strategies can adjust preconditioning frequency
 
-block_preconditioning.jl
+[ ] Ensure compatibility with both dense and sparse matrix structures
 
-physics_preconditioning.jl
+[ ] Document expected behavior, parameter meanings, and performance trade‑offs
 
-adaptive_preconditioning.jl
+[ ] Add error‐handling for degenerate or singular preconditioners (e.g. fallback strategies)
 
-multilevel_preconditioning.jl
+=== BACKENDS ===
 
-Strategies:
+General / Cross‑Cutting
 
-Sparse Direct: Sparse LU, Cholesky
+[ ] API consistency: Ensure every backend implements the same core interface (grad!, jacobian!, etc.) and error reporting.
 
-Iterative: Krylov solvers
+[ ] Documentation & Examples: Add docstrings, usage snippets, and link to central README.
 
-Physics-Informed: Preconditioners tailored to domain structure
+[ ] Unit & Integration Tests: Cover scalar, vector, and sparse inputs; compare against finite‑difference reference.
 
-Block: Partitioned system handling
+[ ] Benchmark Suite: Automate performance comparison across backends for a set of representative models.
 
-Adaptive: Recomputed preconditioners as needed
+AD_interface.jl
 
-✂️ 8. Operator Splitting (splitting/)
-Files:
+[ ] Finalize Interface: Define and document the required functions: grad!, hessian!, jacobian!, plus optional sparse variants.
 
-strang_splitting.jl
+[ ] Dispatch Logic: Hook into core solver so that selecting “:AD” routes through this interface.
 
-lie_splitting.jl
+[ ] Error Handling: Standardize exceptions and fallbacks (e.g. fall back to FD on unsupported operations).
 
-additive_splitting.jl
+enzyme_backend.jl
 
-multiplicative_splitting.jl
+[ ] Complete Reverse‐Mode Support: Implement reverse‐mode grad and Hessian-vector products.
 
-adaptive_splitting.jl
+[ ] Threading & CPU‐Affine Tuning: Expose control over Enzyme’s threading parameters for large problems.
 
-parallel_splitting.jl
+[ ] Memory Management: Release intermediate tapes promptly; document any sticky buffers.
 
-Methods:
+[ ] Tests vs FD: Validate accuracy against finite‐difference on stiff and non‑stiff ODE examples.
 
-Reaction–Diffusion: Reaction and transport operator separation
+hybrid_backend.jl
 
-Multiphysics: Split across coupled physics (e.g. heat + mass)
+[ ] Strategy Selection Logic: Implement rules for choosing between symbolic, AD, and FD based on problem size & sparsity.
 
-Spatial: Domain decomposition
+[ ] User Overrides: Allow users to force a particular backend or specify heuristics.
 
-Temporal: Multirate integration strategies
+[ ] Fallback Mechanism: On failure (e.g. symbolic not available), automatically switch to next best option.
 
-📈 9. Performance Monitoring (monitoring/)
-Files:
+[ ] Performance Logging: Emit metrics on time spent in each backend for later profiling.
 
-performance_metrics.jl
+symbolic_backend.jl
 
-convergence_monitoring.jl
+[ ] ModelingToolkit Integration: Wire up Symbolics.jacobian and Symbolics.gradient calls with proper simplification.
 
-resource_monitoring.jl
+[ ] Sparse Extraction: Leverage symbolic sparsity detection to produce sparse Jacobian structures.
 
-accuracy_monitoring.jl
+[ ] Expression Caching: Cache generated symbolic expressions to avoid repeated re‑derivation.
 
-adaptive_monitoring.jl
+[ ] Error Checks: Detect unsupported functions or control flows and emit clear diagnostics.
 
-visualization_monitoring.jl
+finite_difference.jl
 
-Features:
+[ ] Adaptive Step‐Size: Implement automatic selection of Δ for forward/backward-difference based on scale & tolerance.
 
-Real-time runtime and memory tracking
+[ ] Vectorization: Allow batch evaluation of multiple directional derivatives in one pass.
 
-Visual dashboards (possibly with Makie or Pluto integration)
+[ ] Parallel FD: Use multi‐threading for independent directional derivatives on large systems.
 
-Accuracy and convergence rate logging
+[ ] Documentation: Clarify limitations (e.g. noise sensitivity) and recommended tolerances.
 
-Performance-triggered adaptation logic
+sparse_forwarddiff.jl
 
-🔧 10. Utilities and Helpers (utilities/)
-Files:
+[ ] Correctness on Large Sparse: Test on large, sparse Jacobians to ensure no fill‐in occurs.
 
-cache_management.jl
+[ ] Benchmark vs Dense FD: Quantify speedups for varying sparsity patterns.
 
-parallel_utilities.jl
+[ ] User Configuration: Expose options for coloring heuristics or seed matrix strategies.
 
-io_utilities.jl
+[ ] Integration Tests: Hook into solver pipeline to verify downstream stability and accuracy.
 
-debugging_utilities.jl
+linsolve_interface.jl
 
-benchmark_utilities.jl
+[ ] Additional Solver Hooks: Add support for iterative solvers (GMRES, BiCGSTAB) and preconditioner callbacks.
 
-compatibility_utilities.jl
+[ ] Preconditioning API: Define how user‑supplied or auto‑generated preconditioners plug into the interface.
 
-🧵 11. Main Interface
+[ ] Error Reporting: Standardize on exception types when linear solves fail to converge.
 
-solve(problem, Frankenstein(); kwargs...) # <- Black-box solver entry point
+[ ] Test Matrix Suite: Include SPD, nonsymmetric, and ill‑conditioned test matrices for CI.
 
-# Additional API
-analysis = analyze_system(f!, u0, p)
-config = create_monster_config(analysis, preferences)
-profile = profile_solver(config, problem)
+=== SOLVERS ===
 
-⚙️ 12. Configuration System
-Hierarchical Settings:
+General / Cross‑Cutting
 
-Global algorithm settings
+[ ]  Define and enforce a consistent API signature for all solver functions
 
-Backend preferences and fallbacks
+[ ]  Integrate with project’s Logging utility for step‑by‑step diagnostics
 
-Solver strategy priorities
+[ ]  Write thorough unit and integration tests covering edge cases (stiff, sparse, multiscale)
 
-Adaptation heuristics
+[ ]  Benchmark performance and memory usage across representative problem sets
 
-Performance targets and resource caps
+adaptive_solvers.jl
 
-🔌 13. Extension Points
-Plugin System:
+[ ]  Implement adaptive time‑step controller leveraging error estimates
 
-Custom AD backend modules
+[ ]  Expose hooks for integration with AdaptationController strategies
 
-User-specified solver strategies
+[ ]  Add option to switch between PI, PID, and embedded-step controllers
 
-Domain-specific preconditioners
+algorithm_selector.jl
 
-Custom operator splitting logic
+[ ]  Define decision tree or ML‑based selector using problem metrics (stiffness, sparsity, size)
 
-External adaptation policies
+[ ] Add configurable weighting for different metrics
 
-🧪 14. Testing and Validation
-Tests:
+[ ] Implement fallback logic for unsupported combinations
 
-Unit tests for each component
+base_types.jl
 
-Integration tests across modules
+[ ] Formalize abstract types and interfaces for solvers, options, and results
 
-Performance regression benchmarks
+[ ] Document expected fields (e.g. method name, tolerances, order)
 
-Accuracy validation vs known solutions
+[ ] Add convenience constructors for common configurations
 
-Robustness tests (e.g. chaotic, degenerate systems)
+composite_solvers.jl
 
-📚 15. Documentation and Examples
-Planned Docs:
+[ ] Support chaining of multiple solver stages (e.g. explicit→implicit)
 
-Full API reference
+[ ] Implement error propagation and step coordination between stages
 
-High-level tutorial (ODE → solve)
+[ ] Expose user‑configurable split points and stage thresholds
 
-Mathematical appendix (stiffness, IMEX, etc.)
+explicit_solvers.jl
 
-Performance tuning guide
+[ ] Add higher‑order Runge–Kutta methods (e.g. Dormand‑Prince, Cash–Karp)
 
-Problem examples (from SBML, PDEs, DAEs, etc.)
+[ ] Implement FSAL optimization where applicable
+
+[ ] Provide dense output / interpolation for event detection
+
+multiscale_solvers.jl
+
+[ ] Implement heterogeneous multiscale method (HMM) framework
+
+[ ] Expose options for micro‑solver and macro‑solver coupling
+
+[ ] Add diagnostics for scale separation quality
+
+sparse_solvers.jl
+
+[ ] Integrate Jacobian-free Newton–Krylov (JFNK) methods
+
+[ ] Support user‑supplied sparse matrix structures (CSC, CSR)
+
+[ ] Optimize preconditioner hooks for sparse linear solves
+
+specialty_solvers.jl
+
+[ ] Collect domain‑specific integrators (e.g. symplectic, event‑driven)
+
+[ ] Provide interface for user‑plugged custom methods
+
+[ ] Document expected behavior and limitations of each specialty solver
+
+stiff_solvers.jl
+
+[ ] Implement implicit Rosenbrock and SDIRK methods
+
+[ ] Leverage adaptive Jacobian update strategies
+
+[ ] Add stiffness detection callbacks to switch methods automatically
+
+solvers.jl
+
+[ ] Create unified solve dispatch that selects and calls the appropriate solver module
+
+[ ] Handle common options parsing and validation
+
+[ ] Return standardized result objects with metadata (timings, step counts, errors)
+
+Inspiration
+-----------
+This project was built as a "meta-solver" — an intelligent black box that chooses and tunes the best solver for the job. It aspires to be the scikit-learn of Julia ODE solvers.
+
+License
+-------
+MIT License © 2025 Jelterminator
