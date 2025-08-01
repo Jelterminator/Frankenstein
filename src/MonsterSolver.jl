@@ -1,71 +1,83 @@
 module MonsterSolver
 
-"""
-MonsterSolver: A flexible solver that integrates algorithm selection and adaptation strategies
-Usage:
-    ms = MonsterSolver(tol=1e-6)
-    t, u = solve!(ms, f, u0, tspan; kwargs...)
-"""
-
-# Import required components from the project
-import Frankenstein
-using ..solvers: select_algorithm
+using SciMLBase: AbstractAlgorithm, init, step!, reinit!
+using ..Core: SystemAnalysis
+using ..analysis: needs_analysis!
+using ..solvers: select_algorithm, SolverConfiguration
 using ..adaptation: AdaptationController
-using ..analysis: condition_analysis, needs_analysis_update!
 using ..utilities: Logging
 
-# Public API
-export MonsterSolver, solve!
+# -----------------------------------------------------------------------------
+# Public API: MonsterSolver Algorithm
+# -----------------------------------------------------------------------------
 
-"""
-MonsterSolver struct:
-- alg: algorithm selector
-- adapt: adaptation controller
-- tol: overall tolerance for the solver
-"""
-struct MonsterSolver{T}
-    alg
-    adapt::AdaptationController
+struct MonsterSolver{T} <: AbstractAlgorithm
+    alg_sel::Any                   # algorithm selector/registry
+    analysis_state::SystemAnalysis{T}
+    adapt::AdaptationController{T}
     tol::T
 end
 
-"""
-Constructor for MonsterSolver
-- tol: desired numerical tolerance
-"""
-function MonsterSolver(; tol::Real = 1e-6)
-    alg = Frankenstein.algorithm_selector()
-    adapt = AdaptationController(tol)
-    return MonsterSolver{typeof(tol)}(alg, adapt, tol)
+MonsterSolver(; tol::Real=1e-6) = MonsterSolver(
+    Frankenstein.algorithm_selector(),
+    SystemAnalysis{typeof(tol)}(),
+    AdaptationController(tol),
+    tol
+)
+
+# -----------------------------------------------------------------------------
+# Initialization: called once before stepping
+# -----------------------------------------------------------------------------
+
+function init(alg::MonsterSolver, prob, integrator)
+    # Initial lightweight analysis
+    alg.analysis_state = analyze_system_structure(prob)
+    # Choose initial solver configuration
+    solver = select_best_algorithm(alg.analysis_state)
+    Logging.info("[MonsterSolver] Initial alg: $(typeof(solver))")
+    # Store chosen config in integrator for hot-swap
+    integrator.opts[:monster_cfg] = cfg
+    # Initialize the integrator with the chosen solver
+    reinit!(integrator, cfg)
 end
 
-"""
-solve!(ms, f, u0, tspan; kwargs...)
-- ms: MonsterSolver instance
-- f: ODE function f(t, u)
-- u0: initial state
-- tspan: tuple (t0, tf)
-- kwargs: additional arguments passed to underlying solver
-"""
-function solve!(ms::MonsterSolver, f, u0, tspan; kwargs...)
-    # 1. Analyze problem conditioning
-    cond = condition_analysis(f, u0, tspan)
-    Logging.info("Condition analysis: \$cond")
+# -----------------------------------------------------------------------------
+# Single step: called repeatedly
+# -----------------------------------------------------------------------------
 
-    # 2. Select best algorithm based on analysis
-    solver_fn = select_algorithm(ms.alg, cond)
-    Logging.info("Selected solver: \$(typeof(solver_fn))")
+function step!(integrator)
+    # Perform one step with current internals
+    SciMLBase.step!(integrator)
 
-    # 3. Setup adaptation callback
-    callback = ms.adapt.callback
+    # Run per-step analysis update
+    alg = integrator.algorithm :: MonsterSolver
+     needs_analysis_update!(alg.analysis_state, integrator)
 
-    # 4. Execute solver with adaptation
-    result = solver_fn(f, u0, tspan;
-        tol = ms.tol,
-        callback = callback,
-        kwargs...)
+    # Decide if a switch is needed
+    if alg.adapt.should_switch?(alg.analysis_state)
+        # Select new config
+        new_cfg = select_algorithm(alg.alg_sel, alg.analysis_state)
+        Logging.info("[MonsterSolver] Switching to $(typeof(new_cfg.solver)) at t=$(integrator.t)")
+        # Apply the reinit logic
+        reinit!(integrator, new_cfg)
+    end
+end
 
-    return result
+# -----------------------------------------------------------------------------
+# Reinitialization: apply a new config to integrator internals
+# -----------------------------------------------------------------------------
+
+function reinit!(integrator, cfg::SolverConfiguration)
+    # Set algorithm object (e.g. Tsit5(), Rosenbrock23(), etc.)
+    integrator.algorithm = cfg.solver
+    # Set linear solver / AD backend if needed
+    integrator.opts[:linear_solver]  = cfg.linear_solver
+    integrator.opts[:ad_backend]     = cfg.ad_backend
+    # Any other hook-ins
+    # e.g. integrator.opts[:save_everystep] = true
+
+    # Store for next reference
+    integrator.opts[:monster_cfg] = cfg
 end
 
 end # module
